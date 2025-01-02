@@ -1,0 +1,50 @@
+{
+    "server": {
+        "host": "0.0.0.0",
+        "port": 8080,
+        "readTimeout": 15,
+        "writeTimeout": 15,
+        "maxHeaderBytes": 1048576
+    },
+    "kafka": {
+        "brokers": ["localhost:9092"],
+        "groupID": "notification-service",
+        "topics": {
+            "userEvents": "user-events"
+        }
+    },
+    "redis": {
+        "host": "localhost",
+        "port": 6379,
+        "password": "",
+        "db": 0
+    },
+    "email": {
+        "provider": "sendgrid",
+        "sendgrid": {
+            "apiKey": "",
+            "fromEmail": "noreply@example.com",
+            "fromName": "Notification Service"
+        },
+        "smtp": {
+            "host": "smtp.gmail.com",
+            "port": 587,
+            "username": "",
+            "password": "",
+            "fromEmail": "noreply@example.com",
+            "fromName": "Notification Service"
+        }
+    },
+    "templates": {
+        "path": "templates",
+        "defaultLocale": "en"
+    },
+    "rateLimiting": {
+        "enabled": true,
+        "requestsPerMinute": 60
+    },
+    "metrics": {
+        "enabled": true,
+        "path": "/metrics"
+    }
+}
