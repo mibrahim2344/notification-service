@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -21,7 +22,7 @@ type NotificationHandler struct {
 // NotificationService defines the interface for notification operations
 type NotificationService interface {
 	SendNotification(notification *model.Notification) error
-	GetNotification(id string) (*model.Notification, error)
+	GetNotification(ctx context.Context, id string) (*model.Notification, error)
 	GetNotificationsByRecipient(recipient string, limit, offset int) ([]*model.Notification, error)
 }
 
@@ -90,6 +91,52 @@ func (h *NotificationHandler) SendNotification(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Validate required fields
+	if req.Recipient == "" {
+		h.logger.Error("missing recipient")
+		metrics.RecordOperationDuration("http_"+operation, "error", time.Since(start).Seconds())
+		writeError(w, "Recipient is required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate notification type
+	validTypes := map[string]bool{"email": true, "sms": true, "push": true}
+	if !validTypes[req.Type] {
+		h.logger.Error("invalid notification type", zap.String("type", req.Type))
+		metrics.RecordOperationDuration("http_"+operation, "error", time.Since(start).Seconds())
+		writeError(w, "Invalid notification type. Must be one of: email, sms, push", http.StatusBadRequest)
+		return
+	}
+
+	// Validate content
+	if req.Content == "" {
+		h.logger.Error("missing content")
+		metrics.RecordOperationDuration("http_"+operation, "error", time.Since(start).Seconds())
+		writeError(w, "Content is required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate priority
+	validPriorities := map[string]bool{"high": true, "medium": true, "low": true}
+	if !validPriorities[req.Priority] {
+		h.logger.Error("invalid priority", zap.String("priority", req.Priority))
+		metrics.RecordOperationDuration("http_"+operation, "error", time.Since(start).Seconds())
+		writeError(w, "Invalid priority. Must be one of: high, medium, low", http.StatusBadRequest)
+		return
+	}
+
+	// Convert string templateID to UUID
+	var templateID uuid.UUID
+	if req.TemplateID != "" {
+		var err error
+		templateID, err = uuid.Parse(req.TemplateID)
+		if err != nil {
+			h.logger.Error("invalid template ID format", zap.Error(err))
+			writeError(w, "invalid template ID format", http.StatusBadRequest)
+			return
+		}
+	}
+
 	notification := &model.Notification{
 		ID:           uuid.New(),
 		Recipient:    req.Recipient,
@@ -98,7 +145,7 @@ func (h *NotificationHandler) SendNotification(w http.ResponseWriter, r *http.Re
 		Content:      req.Content,
 		Priority:     model.Priority(req.Priority),
 		Status:       model.StatusPending,
-		TemplateID:   req.TemplateID,
+		TemplateID:   templateID,
 		TemplateData: req.TemplateData,
 		Metadata:     req.Metadata,
 		CreatedAt:    time.Now(),
@@ -151,7 +198,8 @@ func (h *NotificationHandler) GetNotification(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	notification, err := h.notificationService.GetNotification(id)
+	// Get notification by ID
+	notification, err := h.notificationService.GetNotification(r.Context(), id)
 	if err != nil {
 		h.logger.Error("failed to get notification",
 			zap.Error(err),

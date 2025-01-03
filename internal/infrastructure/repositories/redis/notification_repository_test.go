@@ -42,17 +42,12 @@ func setupTestRepo(t *testing.T) (*NotificationRepository, func()) {
 
 func createTestNotification(recipient string) *model.Notification {
 	return model.NewNotification(
-		model.EmailNotification,
 		recipient,
-		"Test Subject",
-		"Test Content",
-		model.PriorityMedium,
-		"test-template",
+		model.EmailNotification,
+		model.EmailTemplate,
+		uuid.New(),
 		map[string]string{
 			"testKey": "testValue",
-		},
-		map[string]string{
-			"metaKey": "metaValue",
 		},
 	)
 }

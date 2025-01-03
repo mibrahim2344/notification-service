@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mibrahim2344/notification-service/internal/domain/model"
 	"github.com/mibrahim2344/notification-service/internal/domain/services"
 	"go.uber.org/zap"
@@ -85,17 +86,16 @@ func (s *Service) handleUserRegistered(ctx context.Context, payload []byte) erro
 	}
 
 	notification := model.NewNotification(
-		model.EmailNotification,
 		event.Email,
-		"Welcome to Our Service",
-		content,
-		model.PriorityMedium,
-		"",  // No specific template ID for this notification
+		model.EmailNotification,
+		model.EmailTemplate,
+		uuid.Nil,
 		map[string]string{
+			"subject":   "Welcome to Our Service",
+			"content":   content,
 			"eventType": "user.registered",
 			"userId":    event.UserID,
 		},
-		map[string]string{}, // No additional metadata needed
 	)
 
 	if err := s.repo.Save(ctx, notification); err != nil {
@@ -103,14 +103,14 @@ func (s *Service) handleUserRegistered(ctx context.Context, payload []byte) erro
 	}
 
 	if err := s.emailProvider.SendEmail(ctx, notification.Recipient, notification.Subject, notification.Content); err != nil {
-		notification.MarkAsFailed(err)
+		notification.UpdateStatus(model.StatusFailed, err.Error())
 		if err := s.repo.Update(ctx, notification); err != nil {
 			s.logger.Error("error updating notification status", zap.Error(err))
 		}
 		return fmt.Errorf("error sending welcome email: %w", err)
 	}
 
-	notification.MarkAsSent()
+	notification.UpdateStatus(model.StatusSent, "")
 	if err := s.repo.Update(ctx, notification); err != nil {
 		s.logger.Error("error updating notification status", zap.Error(err))
 	}
@@ -140,17 +140,16 @@ func (s *Service) handleUserVerified(ctx context.Context, payload []byte) error 
 	}
 
 	notification := model.NewNotification(
-		model.EmailNotification,
 		event.Email,
-		"Email Verification Successful",
-		content,
-		model.PriorityMedium,
-		"",  // No specific template ID for this notification
+		model.EmailNotification,
+		model.EmailTemplate,
+		uuid.Nil,
 		map[string]string{
+			"subject":   "Email Verification Successful",
+			"content":   content,
 			"eventType": "user.verified",
 			"userId":    event.UserID,
 		},
-		map[string]string{}, // No additional metadata needed
 	)
 
 	if err := s.repo.Save(ctx, notification); err != nil {
@@ -158,14 +157,14 @@ func (s *Service) handleUserVerified(ctx context.Context, payload []byte) error 
 	}
 
 	if err := s.emailProvider.SendEmail(ctx, notification.Recipient, notification.Subject, notification.Content); err != nil {
-		notification.MarkAsFailed(err)
+		notification.UpdateStatus(model.StatusFailed, err.Error())
 		if err := s.repo.Update(ctx, notification); err != nil {
 			s.logger.Error("error updating notification status", zap.Error(err))
 		}
 		return fmt.Errorf("error sending verification email: %w", err)
 	}
 
-	notification.MarkAsSent()
+	notification.UpdateStatus(model.StatusSent, "")
 	if err := s.repo.Update(ctx, notification); err != nil {
 		s.logger.Error("error updating notification status", zap.Error(err))
 	}
@@ -196,17 +195,16 @@ func (s *Service) handlePasswordReset(ctx context.Context, payload []byte) error
 	}
 
 	notification := model.NewNotification(
-		model.EmailNotification,
 		event.Email,
-		"Password Reset Request",
-		content,
-		model.PriorityMedium,
-		"",  // No specific template ID for this notification
+		model.EmailNotification,
+		model.EmailTemplate,
+		uuid.Nil,
 		map[string]string{
+			"subject":   "Password Reset Request",
+			"content":   content,
 			"eventType": "user.password.reset",
 			"userId":    event.UserID,
 		},
-		map[string]string{}, // No additional metadata needed
 	)
 
 	if err := s.repo.Save(ctx, notification); err != nil {
@@ -214,14 +212,14 @@ func (s *Service) handlePasswordReset(ctx context.Context, payload []byte) error
 	}
 
 	if err := s.emailProvider.SendEmail(ctx, notification.Recipient, notification.Subject, notification.Content); err != nil {
-		notification.MarkAsFailed(err)
+		notification.UpdateStatus(model.StatusFailed, err.Error())
 		if err := s.repo.Update(ctx, notification); err != nil {
 			s.logger.Error("error updating notification status", zap.Error(err))
 		}
 		return fmt.Errorf("error sending password reset email: %w", err)
 	}
 
-	notification.MarkAsSent()
+	notification.UpdateStatus(model.StatusSent, "")
 	if err := s.repo.Update(ctx, notification); err != nil {
 		s.logger.Error("error updating notification status", zap.Error(err))
 	}
@@ -250,17 +248,16 @@ func (s *Service) handlePasswordChanged(ctx context.Context, payload []byte) err
 	}
 
 	notification := model.NewNotification(
-		model.EmailNotification,
 		event.Email,
-		"Password Changed Successfully",
-		content,
-		model.PriorityMedium,
-		"",  // No specific template ID for this notification
+		model.EmailNotification,
+		model.EmailTemplate,
+		uuid.Nil,
 		map[string]string{
+			"subject":   "Password Changed Successfully",
+			"content":   content,
 			"eventType": "user.password.changed",
 			"userId":    event.UserID,
 		},
-		map[string]string{}, // No additional metadata needed
 	)
 
 	if err := s.repo.Save(ctx, notification); err != nil {
@@ -268,14 +265,14 @@ func (s *Service) handlePasswordChanged(ctx context.Context, payload []byte) err
 	}
 
 	if err := s.emailProvider.SendEmail(ctx, notification.Recipient, notification.Subject, notification.Content); err != nil {
-		notification.MarkAsFailed(err)
+		notification.UpdateStatus(model.StatusFailed, err.Error())
 		if err := s.repo.Update(ctx, notification); err != nil {
 			s.logger.Error("error updating notification status", zap.Error(err))
 		}
 		return fmt.Errorf("error sending password changed email: %w", err)
 	}
 
-	notification.MarkAsSent()
+	notification.UpdateStatus(model.StatusSent, "")
 	if err := s.repo.Update(ctx, notification); err != nil {
 		s.logger.Error("error updating notification status", zap.Error(err))
 	}
@@ -302,14 +299,14 @@ func (s *Service) SendNotification(ctx context.Context, notification *model.Noti
 	}
 
 	if err != nil {
-		notification.MarkAsFailed(err)
+		notification.UpdateStatus(model.StatusFailed, err.Error())
 		if updateErr := s.repo.Update(ctx, notification); updateErr != nil {
 			s.logger.Error("error updating notification status", zap.Error(updateErr))
 		}
 		return fmt.Errorf("error sending notification: %w", err)
 	}
 
-	notification.MarkAsSent()
+	notification.UpdateStatus(model.StatusSent, "")
 	if err := s.repo.Update(ctx, notification); err != nil {
 		s.logger.Error("error updating notification status", zap.Error(err))
 	}
@@ -323,4 +320,8 @@ func (s *Service) GetNotification(ctx context.Context, id string) (*model.Notifi
 
 func (s *Service) GetNotificationHistory(ctx context.Context, recipient string, limit, offset int) ([]*model.Notification, error) {
 	return s.repo.FindByRecipient(ctx, recipient, limit, offset)
+}
+
+func (s *Service) GetNotificationsByRecipient(recipient string, limit, offset int) ([]*model.Notification, error) {
+	return s.GetNotificationHistory(context.Background(), recipient, limit, offset)
 }

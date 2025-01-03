@@ -1,12 +1,20 @@
 package main
 
 import (
+	"context"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"strconv"
+
+	"github.com/mibrahim2344/notification-service/internal/api/handlers"
+	apiservices "github.com/mibrahim2344/notification-service/internal/api/services"
 	"github.com/mibrahim2344/notification-service/internal/application/notification"
-	"github.com/mibrahim2344/notification-service/internal/infrastructure/events/kafka"
+	"github.com/mibrahim2344/notification-service/internal/infrastructure/db"
+	"github.com/mibrahim2344/notification-service/internal/infrastructure/repositories/postgres"
 	"go.uber.org/zap"
 )
 
@@ -15,76 +23,111 @@ func main() {
 	logger, _ := zap.NewProduction()
 	defer logger.Sync()
 
-	// Load configuration
-	config := loadConfig()
+	// Initialize database connection
+	dbConfig := db.DefaultConfig()
+	dbConfig.Host = getEnv("DB_HOST", dbConfig.Host)
+	dbConfig.Port = getEnvAsInt("DB_PORT", dbConfig.Port)
+	dbConfig.User = getEnv("DB_USER", dbConfig.User)
+	dbConfig.Password = getEnv("DB_PASSWORD", dbConfig.Password)
+	dbConfig.DBName = getEnv("DB_NAME", dbConfig.DBName)
+	dbConfig.SSLMode = getEnv("DB_SSLMODE", dbConfig.SSLMode)
+
+	// Configure connection pool based on environment
+	dbConfig.MaxOpenConns = getEnvAsInt("DB_MAX_OPEN_CONNS", dbConfig.MaxOpenConns)
+	dbConfig.MaxIdleConns = getEnvAsInt("DB_MAX_IDLE_CONNS", dbConfig.MaxIdleConns)
+	dbConfig.ConnMaxLifetime = getEnvAsDuration("DB_CONN_MAX_LIFETIME", dbConfig.ConnMaxLifetime)
+	dbConfig.ConnMaxIdleTime = getEnvAsDuration("DB_CONN_MAX_IDLE_TIME", dbConfig.ConnMaxIdleTime)
+
+	database, err := db.NewPostgresDB(dbConfig)
+	if err != nil {
+		logger.Fatal("Failed to connect to database", zap.Error(err))
+	}
+	defer db.Close(database)
+
+	// Initialize health checker
+	healthChecker := db.NewHealthChecker(database, 30*time.Second, 5*time.Second)
+	healthChecker.Start()
+	defer healthChecker.Stop()
+
+	// Initialize repositories
+	notificationRepo := postgres.NewNotificationRepository(database)
+	templateRepo := postgres.NewTemplateRepository(database)
 
 	// Initialize services
 	notificationService := notification.NewService(
-		// Initialize dependencies here
-		nil, // repository
+		notificationRepo,
 		nil, // email provider
 		nil, // sms provider
 		nil, // push provider
-		nil, // template engine
+		templateRepo,
 		logger,
 	)
 
-	// Create Kafka consumer
-	consumer, err := kafka.NewConsumer(
-		config.Kafka.Brokers,
-		config.Kafka.GroupID,
-		[]string{config.Kafka.Topics.UserEvents},
-		notificationService,
-		logger,
-	)
-	if err != nil {
-		logger.Fatal("failed to create consumer", zap.Error(err))
+	// Initialize adapter and handlers
+	notificationServiceAdapter := apiservices.NewNotificationServiceAdapter(notificationService)
+	notificationHandler := handlers.NewNotificationHandler(notificationServiceAdapter, logger)
+
+	// Initialize HTTP server
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      setupRoutes(notificationHandler),
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start consumer
-	if err := consumer.Start(); err != nil {
-		logger.Fatal("failed to start consumer", zap.Error(err))
+	// Start server in a goroutine
+	go func() {
+		logger.Info("Starting server", zap.String("addr", server.Addr))
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatal("Failed to start server", zap.Error(err))
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	// Shutdown gracefully
+	logger.Info("Shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		logger.Fatal("Server forced to shutdown", zap.Error(err))
 	}
 
-	// Handle graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	<-sigChan
-	logger.Info("received shutdown signal")
-
-	if err := consumer.Stop(); err != nil {
-		logger.Error("error stopping consumer", zap.Error(err))
-	}
+	logger.Info("Server stopped")
 }
 
-type Config struct {
-	Kafka struct {
-		Brokers []string
-		GroupID string
-		Topics  struct {
-			UserEvents string
+func getEnv(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultValue
+}
+
+func getEnvAsInt(key string, defaultValue int) int {
+	if value, exists := os.LookupEnv(key); exists {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
 		}
 	}
+	return defaultValue
 }
 
-func loadConfig() *Config {
-	// TODO: Implement configuration loading
-	return &Config{
-		Kafka: struct {
-			Brokers []string
-			GroupID string
-			Topics  struct {
-				UserEvents string
-			}
-		}{
-			Brokers: []string{"localhost:9092"},
-			GroupID: "notification-service",
-			Topics: struct {
-				UserEvents string
-			}{
-				UserEvents: "user-events",
-			},
-		},
+func getEnvAsDuration(key string, defaultValue time.Duration) time.Duration {
+	if value, exists := os.LookupEnv(key); exists {
+		if duration, err := time.ParseDuration(value); err == nil {
+			return duration
+		}
 	}
+	return defaultValue
+}
+
+func setupRoutes(notificationHandler *handlers.NotificationHandler) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/notifications", notificationHandler.SendNotification)
+	return mux
 }

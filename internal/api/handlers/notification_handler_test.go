@@ -27,8 +27,8 @@ func (m *MockNotificationService) SendNotification(notification *model.Notificat
 	return args.Error(0)
 }
 
-func (m *MockNotificationService) GetNotification(id string) (*model.Notification, error) {
-	args := m.Called(id)
+func (m *MockNotificationService) GetNotification(ctx context.Context, id string) (*model.Notification, error) {
+	args := m.Called(ctx, id)
 	if args.Error(1) != nil {
 		return nil, args.Error(1)
 	}
@@ -61,10 +61,10 @@ func TestNotificationHandler_SendNotification(t *testing.T) {
 			name: "successful notification send",
 			request: SendNotificationRequest{
 				Recipient: "test@example.com",
-				Type:     "email",
-				Subject:  "Test Subject",
-				Content:  "Test Content",
-				Priority: "high",
+				Type:      "email",
+				Subject:   "Test Subject",
+				Content:   "Test Content",
+				Priority:  "high",
 			},
 			setupMock: func() {
 				mockService.On("SendNotification", mock.AnythingOfType("*model.Notification")).Return(nil)
@@ -75,15 +75,61 @@ func TestNotificationHandler_SendNotification(t *testing.T) {
 			name: "service error",
 			request: SendNotificationRequest{
 				Recipient: "test@example.com",
-				Type:     "email",
-				Subject:  "Test Subject",
-				Content:  "Test Content",
-				Priority: "high",
+				Type:      "email",
+				Subject:   "Test Subject",
+				Content:   "Test Content",
+				Priority:  "high",
 			},
 			setupMock: func() {
 				mockService.On("SendNotification", mock.AnythingOfType("*model.Notification")).Return(assert.AnError)
 			},
 			expectedStatus: http.StatusFailedDependency,
+		},
+		{
+			name: "missing recipient",
+			request: SendNotificationRequest{
+				Type:     "email",
+				Subject:  "Test Subject",
+				Content:  "Test Content",
+				Priority: "high",
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "invalid notification type",
+			request: SendNotificationRequest{
+				Recipient: "test@example.com",
+				Type:      "invalid_type",
+				Subject:   "Test Subject",
+				Content:   "Test Content",
+				Priority:  "high",
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "missing content",
+			request: SendNotificationRequest{
+				Recipient: "test@example.com",
+				Type:      "email",
+				Subject:   "Test Subject",
+				Priority:  "high",
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name: "invalid priority",
+			request: SendNotificationRequest{
+				Recipient: "test@example.com",
+				Type:      "email",
+				Subject:   "Test Subject",
+				Content:   "Test Content",
+				Priority:  "invalid_priority",
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
 		},
 	}
 
@@ -137,7 +183,7 @@ func TestNotificationHandler_GetNotification(t *testing.T) {
 			name:           "successful get",
 			notificationID: notification.ID.String(),
 			setupMock: func() {
-				mockService.On("GetNotification", notification.ID.String()).Return(notification, nil)
+				mockService.On("GetNotification", mock.Anything, notification.ID.String()).Return(notification, nil)
 			},
 			expectedStatus: http.StatusOK,
 		},
@@ -145,7 +191,7 @@ func TestNotificationHandler_GetNotification(t *testing.T) {
 			name:           "not found",
 			notificationID: "non-existent",
 			setupMock: func() {
-				mockService.On("GetNotification", "non-existent").Return(nil, nil)
+				mockService.On("GetNotification", mock.Anything, "non-existent").Return(nil, nil)
 			},
 			expectedStatus: http.StatusNotFound,
 		},
@@ -153,7 +199,7 @@ func TestNotificationHandler_GetNotification(t *testing.T) {
 			name:           "service error",
 			notificationID: notification.ID.String(),
 			setupMock: func() {
-				mockService.On("GetNotification", notification.ID.String()).Return(nil, assert.AnError)
+				mockService.On("GetNotification", mock.Anything, notification.ID.String()).Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusFailedDependency,
 		},
@@ -217,12 +263,12 @@ func TestNotificationHandler_GetNotificationsByRecipient(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		recipient     string
+		recipient      string
 		setupMock      func()
 		expectedStatus int
 	}{
 		{
-			name:       "successful get",
+			name:      "successful get",
 			recipient: "test@example.com",
 			setupMock: func() {
 				mockService.On("GetNotificationsByRecipient", "test@example.com", 10, 0).Return(notifications, nil)
@@ -230,13 +276,13 @@ func TestNotificationHandler_GetNotificationsByRecipient(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:       "missing recipient",
-			recipient: "",
-			setupMock: func() {},
+			name:           "missing recipient",
+			recipient:      "",
+			setupMock:      func() {},
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "service error",
+			name:      "service error",
 			recipient: "test@example.com",
 			setupMock: func() {
 				mockService.On("GetNotificationsByRecipient", "test@example.com", 10, 0).Return([]*model.Notification(nil), assert.AnError)

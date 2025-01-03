@@ -1,17 +1,21 @@
 module github.com/mibrahim2344/notification-service
 
-go 1.21
+go 1.21.5
 
 require (
-	github.com/IBM/sarama v1.41.3
+	github.com/IBM/sarama v1.44.0
 	github.com/alicebob/miniredis/v2 v2.31.1
-	github.com/go-chi/chi/v5 v5.0.12
-	github.com/google/uuid v1.6.0
+	github.com/go-chi/chi/v5 v5.0.11
+	github.com/golang-migrate/migrate/v4 v4.17.0
+	github.com/google/uuid v1.5.0
+	github.com/lib/pq v1.10.9
 	github.com/prometheus/client_golang v1.18.0
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/stretchr/testify v1.10.0
-	go.uber.org/zap v1.27.0
+	go.uber.org/zap v1.26.0
 )
+
+require go.uber.org/atomic v1.7.0 // indirect
 
 require (
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
@@ -22,8 +26,9 @@ require (
 	github.com/eapache/go-resiliency v1.7.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
+	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
